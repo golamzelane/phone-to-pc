@@ -45,7 +45,7 @@
       <h3>🖥️ Layer 2: Screen View</h3>
       <div class="video-box">
         <video id="screen-video" autoplay playsinline muted controls></video>
-        <span id="screen-placeholder" class="placeholder">❌ Screen sharing not started</span>
+        <span id="screen-placeholder" class="placeholder">❌ Screen sharing not supported on mobile browsers</span>
       </div>
     </div>
 
@@ -77,25 +77,19 @@
       peerConnection = new RTCPeerConnection(config);
 
       peerConnection.ontrack = (event) => {
-        // Hide QR Code box as soon as stream tracks start arriving
+        // স্ট্রিম আসা মাত্র QR কোড লুকিয়ে ফেলা হবে
         document.getElementById('session-box').style.display = 'none';
 
         const stream = event.streams[0];
         const track = event.track;
 
         if (track.kind === 'video') {
-          if (track.label.toLowerCase().includes('screen') || track.label.toLowerCase().includes('display')) {
-            const v = document.getElementById('screen-video');
-            v.srcObject = stream;
-            v.style.display = 'block';
-            document.getElementById('screen-placeholder').style.display = 'none';
-          } else {
-            const v = document.getElementById('camera-video');
-            v.srcObject = stream;
-            v.style.display = 'block';
-            document.getElementById('camera-placeholder').style.display = 'none';
-            document.getElementById('switch-btn').style.display = 'inline-block';
-          }
+          const v = document.getElementById('camera-video');
+          v.srcObject = stream;
+          v.style.display = 'block';
+          v.play().catch(e => console.log(e));
+          document.getElementById('camera-placeholder').style.display = 'none';
+          document.getElementById('switch-btn').style.display = 'inline-block';
         }
 
         if (track.kind === 'audio') {
@@ -112,7 +106,10 @@
       };
     }
 
-    socket.on('client-connected', () => initPC());
+    socket.on('client-connected', () => {
+      document.getElementById('session-box').style.display = 'none';
+      initPC();
+    });
 
     socket.on('signal', async (data) => {
       if (!peerConnection) initPC();

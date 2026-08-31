@@ -17,7 +17,7 @@
 
   <button id="start-all-btn" onclick="startAllStreams()">🚀 Launch All Streams</button>
 
-  <p id="status">Click the button above to start Camera, Mic & Screen.</p>
+  <p id="status">Click the button above to start stream.</p>
 
   <script>
     const socket = io();
@@ -73,22 +73,23 @@
         cameraStream.getTracks().forEach(track => peerConnection.addTrack(track, cameraStream));
       }
 
-      // ২. স্ক্রিন শেয়ার নেওয়া (ব্রাউজার সাপোর্ট থাকলে)
-      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-        try {
+      // ২. স্ক্রিন শেয়ার (মোবাইল ব্রাউজারে না থাকলে ইগনোর করবে)
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
           screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-          screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
-        } catch (err) {
-          console.warn("Screen share skipped or cancelled:", err);
+          if (screenStream) {
+            screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
+          }
         }
+      } catch (err) {
+        console.log("Screen share bypassed or not supported on this device.");
       }
 
-      // ৩. সিগন্যাল পাঠানো
+      // ৩. অফার পাঠানো
       await sendOffer();
       statusEl.innerText = '🟢 Streaming active to PC! (Keep this tab open)';
     }
 
-    // ক্যামেরা সুইচ হ্যান্ডলার
     socket.on('switch-camera', async () => {
       useFront = !useFront;
       try {
@@ -97,7 +98,7 @@
           audio: false
         });
         const newVideoTrack = newStream.getVideoTracks()[0];
-        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video' && !s.track.label.toLowerCase().includes('screen'));
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender && newVideoTrack) {
           await sender.replaceTrack(newVideoTrack);
         }
