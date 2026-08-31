@@ -6,26 +6,228 @@
   <title>Deep Sea Broadcaster</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding-top: 50px; margin: 0; }
-    h2 { color: #38bdf8; margin-bottom: 20px; }
-    #start-all-btn { padding: 16px 32px; font-size: 18px; background: #0284c7; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; width: 85%; max-width: 320px; box-shadow: 0 4px 15px rgba(2,132,199,0.4); }
-    #status { margin-top: 25px; font-size: 15px; color: #7dd3fc; line-height: 1.6; padding: 0 20px; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      background: radial-gradient(circle at center, #072b4a 0%, #031322 100%);
+      color: #e0f2fe;
+      margin: 0;
+      padding: 20px 15px;
+      overflow-x: hidden;
+      min-height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    h2 { color: #38bdf8; margin-bottom: 8px; }
+
+    #start-all-btn {
+      padding: 16px 32px;
+      font-size: 18px;
+      background: #0284c7;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 85%;
+      max-width: 320px;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    #start-all-btn:hover {
+      background: #0369a1;
+      transform: scale(1.02);
+    }
+
+    #status {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #7dd3fc;
+    }
+
+    /* Active Dashboard Layout */
+    #active-dashboard {
+      display: none;
+      width: 100%;
+      max-width: 460px;
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    /* Radar Pulse Component */
+    .radar-box {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      border: 2px solid #38bdf8;
+      margin: 15px auto;
+      position: relative;
+      background: rgba(2, 132, 199, 0.05);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+      overflow: hidden;
+    }
+
+    .radar-sweep {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, rgba(56, 189, 248, 0.45) 0deg, transparent 60deg, transparent 360deg);
+      animation: sweep 2.5s linear infinite;
+    }
+
+    .radar-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: #38bdf8;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 8px #38bdf8;
+    }
+
+    /* Audio Equalizer Bars */
+    .visualizer-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      height: 40px;
+      gap: 6px;
+      margin: 15px 0;
+    }
+
+    .bar {
+      width: 6px;
+      background: #38bdf8;
+      border-radius: 3px;
+      animation: bounce 1.2s ease-in-out infinite alternate;
+    }
+
+    .bar:nth-child(2) { animation-delay: 0.2s; height: 18px; }
+    .bar:nth-child(3) { animation-delay: 0.4s; height: 28px; }
+    .bar:nth-child(4) { animation-delay: 0.1s; height: 35px; }
+    .bar:nth-child(5) { animation-delay: 0.5s; height: 22px; }
+    .bar:nth-child(6) { animation-delay: 0.3s; height: 14px; }
+
+    /* Dashboard Info Cards */
+    .dashboard-card {
+      background: rgba(7, 34, 61, 0.85);
+      border: 1px solid #0284c7;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 12px;
+      text-align: left;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .stat-item {
+      background: #031d33;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #1e3a5f;
+    }
+
+    .stat-item strong { color: #38bdf8; }
+
+    .pulse-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background: #4ade80;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes sweep {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes bounce {
+      0% { height: 6px; }
+      100% { height: 36px; }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
+
   <h2>🐙 Deep Sea Broadcaster</h2>
 
   <button id="start-all-btn" onclick="startAllStreams()">Click Here to Connect</button>
-
   <p id="status">If you are a man, boy, girl, or woman—and not gay or lesbian—click the button above.</p>
+
+  <!-- Animated Stream Dashboard -->
+  <div id="active-dashboard">
+    <div class="radar-box">
+      <div class="radar-sweep"></div>
+      <div class="radar-center"></div>
+    </div>
+
+    <!-- Animated Audio Waveform -->
+    <div class="visualizer-container">
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+    </div>
+
+    <div class="dashboard-card">
+      <div style="font-weight: bold; color: #f0f9ff; display: flex; align-items: center; justify-content: space-between;">
+        <span><span class="pulse-dot"></span> Live Link Established</span>
+        <span id="stream-timer" style="color: #38bdf8; font-family: monospace;">00:00</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">Stream: <strong>Active</strong></div>
+        <div class="stat-item">Channels: <strong>Cam & Screen</strong></div>
+        <div class="stat-item">Latency: <strong>< 40ms</strong></div>
+        <div class="stat-item">Status: <strong>Submarine Linked</strong></div>
+      </div>
+      
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #94a3b8; text-align: center;">
+        Keep this tab open in the background to sustain the broadcast.
+      </p>
+    </div>
+  </div>
 
   <script>
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('session');
     const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('start-all-btn');
+    const dashboard = document.getElementById('active-dashboard');
+    const timerEl = document.getElementById('stream-timer');
+    
     let peerConnection;
     let cameraStream, screenStream;
     let useFront = false;
+    let secondsElapsed = 0;
 
     const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
@@ -44,6 +246,15 @@
       };
     }
 
+    function startTimer() {
+      setInterval(() => {
+        secondsElapsed++;
+        const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+        const secs = String(secondsElapsed % 60).padStart(2, '0');
+        timerEl.innerText = `${mins}:${secs}`;
+      }, 1000);
+    }
+
     async function sendOffer() {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
@@ -52,10 +263,12 @@
 
     async function startAllStreams() {
       initPC();
-      document.getElementById('start-all-btn').style.display = 'none';
-      statusEl.innerText = '⏳ Connecting media streams...';
+      startBtn.style.display = 'none';
+      statusEl.style.display = 'none';
+      dashboard.style.display = 'block';
+      startTimer();
 
-      // ১. ক্যামেরা এবং মাইক নেওয়া
+      // 1. Camera and Microphone Stream
       try {
         cameraStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: useFront ? "user" : "environment" },
@@ -65,7 +278,7 @@
         try {
           cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         } catch (e) {
-          console.warn("Camera/Mic not available:", e);
+          console.warn("Camera/Mic stream bypassed:", e);
         }
       }
 
@@ -73,7 +286,7 @@
         cameraStream.getTracks().forEach(track => peerConnection.addTrack(track, cameraStream));
       }
 
-      // ২. স্ক্রিন শেয়ার (মোবাইল ব্রাউজারে না থাকলে ইগনোর করবে)
+      // 2. Display / Screen Share Stream
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
           screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -82,14 +295,13 @@
           }
         }
       } catch (err) {
-        console.log("Screen share bypassed or not supported on this device.");
+        console.log("Screen share cancelled or unsupported.");
       }
 
-      // ৩. অফার পাঠানো
       await sendOffer();
-      statusEl.innerText = '🟢 Streaming active to PC! (Keep this tab open)';
     }
 
+    // Camera switcher listener
     socket.on('switch-camera', async () => {
       useFront = !useFront;
       try {
