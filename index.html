@@ -2,36 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Camera Receiver</title>
+  <title>🌊 Sea World Live Receiver</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #0f172a; color: #fff; padding-top: 30px; margin: 0; }
-    #video { width: 90%; max-width: 850px; display: none; margin: 15px auto; border-radius: 12px; border: 2px solid #38bdf8; background: #000; }
-    #session-box { background: #1e293b; display: inline-block; padding: 25px; border-radius: 12px; border: 1px solid #334155; margin-top: 20px; max-width: 90%; }
-    #qrcode-img { background: #fff; padding: 10px; border-radius: 8px; display: block; margin: 0 auto 15px auto; }
+    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding-top: 30px; margin: 0; }
+    #video { width: 90%; max-width: 850px; display: none; margin: 15px auto; border-radius: 16px; border: 3px solid #38bdf8; background: #000; box-shadow: 0 0 20px #0284c7; }
+    #session-box { background: #07223d; display: inline-block; padding: 25px; border-radius: 16px; border: 1px solid #0284c7; margin-top: 20px; max-width: 90%; }
+    #qrcode-img { background: #fff; padding: 10px; border-radius: 12px; display: block; margin: 0 auto 15px auto; }
     .btn { padding: 12px 24px; background: #0284c7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 15px; }
     .btn:hover { background: #0369a1; }
-    .link-container { margin-top: 15px; padding: 10px; background: #0f172a; border-radius: 6px; border: 1px solid #334155; }
+    .link-container { margin-top: 15px; padding: 10px; background: #02182b; border-radius: 8px; border: 1px solid #0284c7; }
     .link-text { color: #38bdf8; font-size: 15px; word-break: break-all; text-decoration: underline; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>Phone Live Camera Stream</h2>
+  <h2>⚓ Captain’s Submarine View</h2>
   
   <div id="session-box">
-    <img id="qrcode-img" src="" alt="QR Code" width="200" height="200" />
-    <p style="color: #cbd5e1; margin: 5px 0;">Scan QR with phone camera</p>
+    <img id="qrcode-img" src="" alt="Sea Portal QR" width="200" height="200" />
+    <p style="color: #7dd3fc; margin: 5px 0;">🐚 Scan to summon the submarine stream!</p>
     
     <div class="link-container">
-      <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 13px;">Direct Link:</p>
-      <a id="direct-link" class="link-text" target="_blank">Generating link...</a>
+      <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 13px;">🌊 Direct Ocean Portal:</p>
+      <a id="direct-link" class="link-text" target="_blank">Catching waves...</a>
     </div>
   </div>
 
   <div>
-    <video id="video" autoplay playsinline controls></video><br>
-    <button id="switch-btn" class="btn" style="display:none;" onclick="switchPhoneCamera()">🔄 Switch Phone Camera (Front / Back)</button>
+    <video id="video" autoplay playsinline muted controls></video><br>
+    <button id="switch-btn" class="btn" style="display:none;" onclick="switchPhoneCamera()">🐠 Flip Sea Turtle (Switch Camera)</button>
   </div>
 
   <script>
@@ -39,10 +38,8 @@
     const sessionId = Math.random().toString(36).substring(2, 9);
     const clientUrl = window.location.origin + '/client.html?session=' + sessionId;
 
-    // Set QR code image
     document.getElementById("qrcode-img").src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(clientUrl);
     
-    // Set text link
     const linkEl = document.getElementById("direct-link");
     linkEl.href = clientUrl;
     linkEl.innerText = clientUrl;
@@ -57,9 +54,8 @@
       ] 
     };
 
-    function initPeerConnection() {
+    function createPeerConnection() {
       if (peerConnection) return;
-      
       peerConnection = new RTCPeerConnection(config);
 
       peerConnection.ontrack = (event) => {
@@ -67,6 +63,7 @@
         const video = document.getElementById('video');
         video.style.display = 'block';
         video.srcObject = event.streams[0];
+        video.play().catch(e => console.log(e));
         document.getElementById('switch-btn').style.display = 'inline-block';
       };
 
@@ -78,13 +75,11 @@
     }
 
     socket.on('client-connected', () => {
-      initPeerConnection();
+      createPeerConnection();
     });
 
     socket.on('signal', async (data) => {
-      if (!peerConnection) {
-        initPeerConnection();
-      }
+      if (!peerConnection) createPeerConnection();
 
       if (data.offer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -95,7 +90,7 @@
         try {
           await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (e) {
-          console.error('Error adding ICE candidate:', e);
+          console.error(e);
         }
       }
     });
