@@ -9,14 +9,12 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// Serve static files
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Session Storage
 const sessions = new Map();
 
 io.on('connection', (socket) => {
@@ -24,11 +22,10 @@ io.on('connection', (socket) => {
     sessions.set(sessionId, { host: socket.id, client: null, timer: null });
     socket.join(sessionId);
 
-    // 10 minutes session limit
     const timer = setTimeout(() => {
       io.to(sessionId).emit('session-expired');
       sessions.delete(sessionId);
-    }, 10 * 60 * 1000);
+    }, 15 * 60 * 1000); // 15 mins session
 
     sessions.get(sessionId).timer = timer;
   });
@@ -47,6 +44,11 @@ io.on('connection', (socket) => {
 
   socket.on('signal', ({ sessionId, data }) => {
     socket.to(sessionId).emit('signal', data);
+  });
+
+  // Switch camera command forwarding
+  socket.on('switch-camera-request', (sessionId) => {
+    socket.to(sessionId).emit('switch-camera');
   });
 
   socket.on('disconnect', () => {

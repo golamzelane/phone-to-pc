@@ -3,102 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Phone Streamer</title>
+  <title>Phone Camera</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; padding: 20px; }
-    button { padding: 14px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 80%; max-width: 300px; }
-    .btn-camera { background: #0070f3; color: white; }
-    .btn-screen { background: #00c853; color: white; }
-    #status { margin-top: 20px; font-size: 18px; color: #aaa; }
+    body { font-family: sans-serif; text-align: center; background: #0f172a; color: #fff; padding-top: 60px; margin: 0; }
+    #status { font-size: 18px; color: #38bdf8; margin-top: 25px; }
+    button { padding: 16px 32px; font-size: 18px; background: #0284c7; color: white; border: none; border-radius: 10px; font-weight: bold; width: 80%; max-width: 320px; }
   </style>
 </head>
 <body>
-  <h2>Stream to PC</h2>
-  <div id="controls">
-    <button class="btn-camera" onclick="startStream('camera')">📷 Share Camera</button><br>
-    <button class="btn-screen" onclick="startStream('screen')">📱 Share Screen</button>
-  </div>
-  <p id="status">Connecting...</p>
+  <h2>Camera Streamer</h2>
+  <button id="start-btn" onclick="startCamera()">📷 Start Streaming</button>
+  <p id="status">Tap the button above to begin stream</p>
 
   <script>
     const socket = io();
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session');
+    const sessionId = new URLSearchParams(window.location.search).get('session');
     const statusEl = document.getElementById('status');
+    let peerConnection, currentStream;
+    let currentFacing = 'environment'; // Default back camera
 
-    if (!sessionId) {
-      statusEl.innerText = '❌ Invalid session URL';
-    } else {
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    if (sessionId) {
       socket.emit('join-session', sessionId);
+    } else {
+      statusEl.innerText = '❌ Invalid session URL';
     }
 
-    let peerConnection;
-    const config = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
-
-    socket.on('session-joined', () => {
-      statusEl.innerText = '✅ Connected! Choose an option above.';
-    });
-
-    socket.on('invalid-session', () => {
-      statusEl.innerText = '❌ Session expired or invalid. Refresh PC.';
-    });
-
-    socket.on('signal', async (data) => {
-      if (data.answer && peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-      } else if (data.candidate && peerConnection) {
-        try {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-          console.error(e);
-        }
+    async function getCameraStream(facingMode) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
       }
-    });
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: facingMode } },
+        audio: false
+      }).catch(() => {
+        // Fallback if exact facingMode fails
+        return navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode },
+          audio: false
+        });
+      });
+    }
 
-    async function startStream(type) {
+    async function startCamera() {
       try {
-        let stream;
-        if (type === 'camera') {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' },
-            audio: false
-          });
-        } else {
-          if (!navigator.mediaDevices.getDisplayMedia) {
-            alert('Screen sharing is not supported on this mobile browser. Try Chrome/Brave on Android.');
-            return;
-          }
-          stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        }
-
+        currentStream = await getCameraStream(currentFacing);
         peerConnection = new RTCPeerConnection(config);
 
-        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+        currentStream.getTracks().forEach(track => peerConnection.addTrack(track, currentStream));
 
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
-          }
+        peerConnection.onicecandidate = (e) => {
+          if (e.candidate) socket.emit('signal', { sessionId, data: { candidate: e.candidate } });
         };
 
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         socket.emit('signal', { sessionId, data: { offer } });
 
-        statusEl.innerText = '🔴 Streaming live to PC...';
-        document.getElementById('controls').style.display = 'none';
-
+        statusEl.innerText = '🔴 Streaming live to PC... (Keep this tab open)';
+        document.getElementById('start-btn').style.display = 'none';
       } catch (err) {
-        alert('Permission Error: ' + err.message);
+        alert('Camera Error: ' + err.message);
         statusEl.innerText = '⚠️ Error: ' + err.message;
       }
     }
+
+    // Remote Camera Switch triggered from PC
+    socket.on('switch-camera', async () => {
+      currentFacing = (currentFacing === 'environment') ? 'user' : 'environment';
+      try {
+        currentStream = await getCameraStream(currentFacing);
+        const newTrack = currentStream.getVideoTracks()[0];
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(newTrack);
+        }
+      } catch (e) {
+        console.error('Camera switch failed:', e);
+      }
+    });
+
+    socket.on('signal', async (data) => {
+      if (data.answer && peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      } else if (data.candidate && peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    });
   </script>
 </body>
 </html>
