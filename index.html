@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receiver Screen</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; }
+    #video { width: 80%; max-width: 900px; display: none; margin: 20px auto; }
+    #qrcode { display: inline-block; background: #fff; padding: 15px; border-radius: 8px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h2>Phone Live Screen / Camera</h2>
+  <div id="session-box">
+    <div id="qrcode"></div>
+    <p>Scan this QR with phone (Valid for 10 mins)</p>
+  </div>
+  <video id="video" autoplay playsinline controls></video>
+
+  <script>
+    const socket = io();
+    const sessionId = Math.random().toString(36).substring(2, 9);
+    const clientUrl = `${window.location.origin}/client.html?session=${sessionId}`;
+
+    new QRCode(document.getElementById("qrcode"), clientUrl);
+    socket.emit('create-session', sessionId);
+
+    let peerConnection;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    socket.on('client-connected', async () => {
+      peerConnection = new RTCPeerConnection(config);
+
+      peerConnection.ontrack = (event) => {
+        document.getElementById('session-box').style.display = 'none';
+        const video = document.getElementById('video');
+        video.style.display = 'block';
+        video.srcObject = event.streams[0];
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
+        }
+      };
+    });
+
+    socket.on('signal', async (data) => {
+      if (data.offer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('signal', { sessionId, data: { answer } });
+      } else if (data.candidate && peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    });
+
+    socket.on('session-expired', () => alert('Session expired! Please refresh.'));
+  </script>
+</body>
+</html>
