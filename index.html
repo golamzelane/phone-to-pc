@@ -2,35 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>🌊 Sea World Live Receiver</title>
+  <title>🌊 Sea World Multi-Stream Receiver</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding-top: 30px; margin: 0; }
-    #video { width: 90%; max-width: 850px; display: none; margin: 15px auto; border-radius: 16px; border: 3px solid #38bdf8; background: #000; box-shadow: 0 0 20px #0284c7; }
-    #session-box { background: #07223d; display: inline-block; padding: 25px; border-radius: 16px; border: 1px solid #0284c7; margin-top: 20px; max-width: 90%; }
-    #qrcode-img { background: #fff; padding: 10px; border-radius: 12px; display: block; margin: 0 auto 15px auto; }
-    .btn { padding: 12px 24px; background: #0284c7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 15px; }
-    .btn:hover { background: #0369a1; }
-    .link-container { margin-top: 15px; padding: 10px; background: #02182b; border-radius: 8px; border: 1px solid #0284c7; }
-    .link-text { color: #38bdf8; font-size: 15px; word-break: break-all; text-decoration: underline; font-weight: bold; }
+    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding: 20px 0; margin: 0; }
+    #session-box { background: #07223d; display: inline-block; padding: 20px; border-radius: 12px; border: 1px solid #0284c7; margin-top: 15px; }
+    #qrcode-img { background: #fff; padding: 8px; border-radius: 8px; margin-bottom: 10px; }
+    .stream-container { display: flex; flex-direction: column; align-items: center; gap: 20px; margin-top: 20px; }
+    .stream-card { width: 90%; max-width: 800px; background: #07223d; border: 2px solid #0284c7; border-radius: 12px; padding: 15px; box-sizing: border-box; }
+    .stream-card h3 { margin: 0 0 10px 0; color: #38bdf8; font-size: 18px; }
+    .video-box { width: 100%; height: 350px; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+    video { width: 100%; height: 100%; object-fit: contain; display: none; }
+    .placeholder { color: #94a3b8; font-size: 15px; font-weight: bold; }
+    .audio-status { padding: 15px; border-radius: 8px; background: #0b2942; color: #94a3b8; font-size: 15px; }
+    .active-status { color: #4ade80 !important; font-weight: bold; }
+    .btn { padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h2>⚓ Captain’s Submarine View</h2>
-  
+  <h2>⚓ Captain’s Multi-Stream View</h2>
+
   <div id="session-box">
-    <img id="qrcode-img" src="" alt="Sea Portal QR" width="200" height="200" />
-    <p style="color: #7dd3fc; margin: 5px 0;">🐚 Scan to summon the submarine stream!</p>
-    
-    <div class="link-container">
-      <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 13px;">🌊 Direct Ocean Portal:</p>
-      <a id="direct-link" class="link-text" target="_blank">Catching waves...</a>
-    </div>
+    <img id="qrcode-img" src="" width="180" height="180" />
+    <p style="margin: 0; color: #7dd3fc; font-size: 14px;">Scan or open direct portal link</p>
+    <a id="direct-link" style="color:#38bdf8; word-break: break-all; font-size: 13px;" target="_blank">Loading...</a>
   </div>
 
-  <div>
-    <video id="video" autoplay playsinline muted controls></video><br>
-    <button id="switch-btn" class="btn" style="display:none;" onclick="switchPhoneCamera()">🐠 Flip Sea Turtle (Switch Camera)</button>
+  <div class="stream-container">
+    <!-- Layer 1: Camera View -->
+    <div class="stream-card">
+      <h3>📷 Layer 1: Camera View</h3>
+      <div class="video-box">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <span id="camera-placeholder" class="placeholder">❌ Camera permission not granted</span>
+      </div>
+      <button id="switch-btn" class="btn" style="display:none;" onclick="switchCamera()">🔄 Switch Camera</button>
+    </div>
+
+    <!-- Layer 2: Screen View -->
+    <div class="stream-card">
+      <h3>🖥️ Layer 2: Screen View</h3>
+      <div class="video-box">
+        <video id="screen-video" autoplay playsinline muted></video>
+        <span id="screen-placeholder" class="placeholder">❌ Screen sharing not started</span>
+      </div>
+    </div>
+
+    <!-- Layer 3: Audio / Mic View -->
+    <div class="stream-card">
+      <h3>🎙️ Layer 3: Microphone Status</h3>
+      <div id="mic-status" class="audio-status">❌ Microphone permission not granted</div>
+      <audio id="remote-audio" autoplay></audio>
+    </div>
   </div>
 
   <script>
@@ -38,8 +61,7 @@
     const sessionId = Math.random().toString(36).substring(2, 9);
     const clientUrl = window.location.origin + '/client.html?session=' + sessionId;
 
-    document.getElementById("qrcode-img").src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(clientUrl);
-    
+    document.getElementById("qrcode-img").src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(clientUrl);
     const linkEl = document.getElementById("direct-link");
     linkEl.href = clientUrl;
     linkEl.innerText = clientUrl;
@@ -47,55 +69,62 @@
     socket.emit('create-session', sessionId);
 
     let peerConnection;
-    const config = { 
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ] 
-    };
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    function createPeerConnection() {
+    function initPC() {
       if (peerConnection) return;
       peerConnection = new RTCPeerConnection(config);
 
       peerConnection.ontrack = (event) => {
         document.getElementById('session-box').style.display = 'none';
-        const video = document.getElementById('video');
-        video.style.display = 'block';
-        video.srcObject = event.streams[0];
-        video.play().catch(e => console.log(e));
-        document.getElementById('switch-btn').style.display = 'inline-block';
+        const stream = event.streams[0];
+        const track = event.track;
+
+        if (track.kind === 'video') {
+          // Identify if it's camera or screen share based on track label/id
+          if (track.label.toLowerCase().includes('screen') || track.label.toLowerCase().includes('display')) {
+            const v = document.getElementById('screen-video');
+            v.srcObject = stream;
+            v.style.display = 'block';
+            document.getElementById('screen-placeholder').style.display = 'none';
+          } else {
+            const v = document.getElementById('camera-video');
+            v.srcObject = stream;
+            v.style.display = 'block';
+            document.getElementById('camera-placeholder').style.display = 'none';
+            document.getElementById('switch-btn').style.display = 'inline-block';
+          }
+        }
+
+        if (track.kind === 'audio') {
+          const a = document.getElementById('remote-audio');
+          a.srcObject = stream;
+          const mic = document.getElementById('mic-status');
+          mic.innerText = '🟢 Microphone Active & Streaming';
+          mic.classList.add('active-status');
+        }
       };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
-        }
+      peerConnection.onicecandidate = (e) => {
+        if (e.candidate) socket.emit('signal', { sessionId, data: { candidate: e.candidate } });
       };
     }
 
-    socket.on('client-connected', () => {
-      createPeerConnection();
-    });
+    socket.on('client-connected', () => initPC());
 
     socket.on('signal', async (data) => {
-      if (!peerConnection) createPeerConnection();
-
+      if (!peerConnection) initPC();
       if (data.offer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         socket.emit('signal', { sessionId, data: { answer } });
       } else if (data.candidate) {
-        try {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-          console.error(e);
-        }
+        try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) {}
       }
     });
 
-    function switchPhoneCamera() {
+    function switchCamera() {
       socket.emit('switch-camera-request', sessionId);
     }
   </script>
