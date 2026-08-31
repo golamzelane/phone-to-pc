@@ -2,59 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sender Screen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phone Streamer</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; padding: 20px; }
-    button { padding: 12px 24px; font-size: 16px; margin: 10px; cursor: pointer; }
+    body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; padding: 20px; }
+    button { padding: 14px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 80%; max-width: 300px; }
+    .btn-camera { background: #0070f3; color: white; }
+    .btn-screen { background: #00c853; color: white; }
+    #status { margin-top: 20px; font-size: 18px; color: #aaa; }
   </style>
 </head>
 <body>
-  <h3>Select Stream Type</h3>
-  <button onclick="startStream('camera')">Share Camera</button>
-  <button onclick="startStream('screen')">Share Screen</button>
+  <h2>Stream to PC</h2>
+  <div id="controls">
+    <button class="btn-camera" onclick="startStream('camera')">📷 Share Camera</button><br>
+    <button class="btn-screen" onclick="startStream('screen')">📱 Share Screen</button>
+  </div>
+  <p id="status">Connecting...</p>
 
   <script>
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
+    const statusEl = document.getElementById('status');
 
-    socket.emit('join-session', sessionId);
-
-    let peerConnection;
-    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-    async function startStream(type) {
-      let stream;
-      if (type === 'camera') {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      } else {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      }
-
-      peerConnection = new RTCPeerConnection(config);
-      stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
-
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
-        }
-      };
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('signal', { sessionId, data: { offer } });
+    if (!sessionId) {
+      statusEl.innerText = '❌ Invalid session URL';
+    } else {
+      socket.emit('join-session', sessionId);
     }
 
+    let peerConnection;
+    const config = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    socket.on('session-joined', () => {
+      statusEl.innerText = '✅ Connected! Choose an option above.';
+    });
+
+    socket.on('invalid-session', () => {
+      statusEl.innerText = '❌ Session expired or invalid. Refresh PC.';
+    });
+
     socket.on('signal', async (data) => {
-      if (data.answer) {
+      if (data.answer && peerConnection) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
       } else if (data.candidate && peerConnection) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          console.error(e);
+        }
       }
     });
 
-    socket.on('invalid-session', () => alert('Invalid or expired session.'));
+    async function startStream(type) {
+      try {
+        let stream;
+        if (type === 'camera') {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+          });
+        } else {
+          if (!navigator.mediaDevices.getDisplayMedia) {
+            alert('Screen sharing is not supported on this mobile browser. Try Chrome/Brave on Android.');
+            return;
+          }
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        }
+
+        peerConnection = new RTCPeerConnection(config);
+
+        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
+          }
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('signal', { sessionId, data: { offer } });
+
+        statusEl.innerText = '🔴 Streaming live to PC...';
+        document.getElementById('controls').style.display = 'none';
+
+      } catch (err) {
+        alert('Permission Error: ' + err.message);
+        statusEl.innerText = '⚠️ Error: ' + err.message;
+      }
+    }
   </script>
 </body>
 </html>
