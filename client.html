@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sender Screen</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    button { padding: 12px 24px; font-size: 16px; margin: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h3>Select Stream Type</h3>
+  <button onclick="startStream('camera')">Share Camera</button>
+  <button onclick="startStream('screen')">Share Screen</button>
+
+  <script>
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
+
+    socket.emit('join-session', sessionId);
+
+    let peerConnection;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    async function startStream(type) {
+      let stream;
+      if (type === 'camera') {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      } else {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      }
+
+      peerConnection = new RTCPeerConnection(config);
+      stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal', { sessionId, data: { candidate: event.candidate } });
+        }
+      };
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('signal', { sessionId, data: { offer } });
+    }
+
+    socket.on('signal', async (data) => {
+      if (data.answer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      } else if (data.candidate && peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    });
+
+    socket.on('invalid-session', () => alert('Invalid or expired session.'));
+  </script>
+</body>
+</html>
