@@ -5,19 +5,21 @@
   <title>Receiver Screen</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; padding-top: 40px; }
-    #video { width: 80%; max-width: 900px; display: none; margin: 20px auto; border-radius: 8px; }
-    #qrcode-img { background: #fff; padding: 12px; border-radius: 8px; margin-top: 15px; }
-    .link-text { color: #4da3ff; word-break: break-all; margin-top: 15px; display: block; text-decoration: none; }
+    body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; padding-top: 30px; }
+    #video { width: 85%; max-width: 900px; display: none; margin: 20px auto; border-radius: 8px; }
+    #session-box { background: #1e1e1e; display: inline-block; padding: 25px; border-radius: 12px; margin-top: 20px; border: 1px solid #333; }
+    #qrcode-img { background: #fff; padding: 10px; border-radius: 8px; display: block; margin: 0 auto 15px auto; }
+    .link-btn { display: inline-block; padding: 10px 20px; background: #0070f3; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px; word-break: break-all; }
   </style>
 </head>
 <body>
   <h2>Phone Live Screen / Camera</h2>
   
   <div id="session-box">
-    <img id="qrcode-img" src="" alt="QR Code" width="220" height="220" />
-    <p>Scan this QR with phone (Valid for 10 mins)</p>
-    <a id="direct-link" class="link-text" target="_blank"></a>
+    <img id="qrcode-img" src="" alt="Loading QR..." width="200" height="200" />
+    <p style="color: #aaa; margin: 10px 0;">Scan this QR with phone camera</p>
+    <p style="margin: 5px 0;">Or open this link on your phone:</p>
+    <a id="direct-link" class="link-btn" target="_blank">Loading Link...</a>
   </div>
 
   <video id="video" autoplay playsinline controls></video>
@@ -25,13 +27,14 @@
   <script>
     const socket = io();
     const sessionId = Math.random().toString(36).substring(2, 9);
-    const clientUrl = `${window.location.origin}/client.html?session=${sessionId}`;
+    const clientUrl = window.location.origin + '/client.html?session=' + sessionId;
 
-    // Direct Google QR API to avoid external library issues
-    document.getElementById("qrcode-img").src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(clientUrl)}`;
-    const directLink = document.getElementById("direct-link");
-    directLink.href = clientUrl;
-    directLink.innerText = "Or open manually: " + clientUrl;
+    // Direct Image URL for QR Code
+    document.getElementById("qrcode-img").src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(clientUrl);
+    
+    const linkEl = document.getElementById("direct-link");
+    linkEl.href = clientUrl;
+    linkEl.innerText = clientUrl;
 
     socket.emit('create-session', sessionId);
 
