@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>🌊 Sea World Multi-Stream Receiver</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌊 Captain’s Multi-Stream Receiver</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding: 20px 0; margin: 0; }
@@ -23,9 +24,9 @@
   <h2>⚓ Captain’s Multi-Stream View</h2>
 
   <div id="session-box">
-    <img id="qrcode-img" src="" width="180" height="180" />
+    <img id="qrcode-img" src="" width="180" height="180" alt="Session QR" />
     <p style="margin: 0; color: #7dd3fc; font-size: 14px;">Scan or open direct portal link</p>
-    <a id="direct-link" style="color:#38bdf8; word-break: break-all; font-size: 13px;" target="_blank">Loading...</a>
+    <a id="direct-link" style="color:#38bdf8; word-break: break-all; font-size: 13px;" target="_blank">Loading link...</a>
   </div>
 
   <div class="stream-container">
@@ -33,8 +34,8 @@
     <div class="stream-card">
       <h3>📷 Layer 1: Camera View</h3>
       <div class="video-box">
-        <video id="camera-video" autoplay playsinline muted></video>
-        <span id="camera-placeholder" class="placeholder">❌ Camera permission not granted</span>
+        <video id="camera-video" autoplay playsinline muted controls></video>
+        <span id="camera-placeholder" class="placeholder">❌ Camera stream not received</span>
       </div>
       <button id="switch-btn" class="btn" style="display:none;" onclick="switchCamera()">🔄 Switch Camera</button>
     </div>
@@ -43,7 +44,7 @@
     <div class="stream-card">
       <h3>🖥️ Layer 2: Screen View</h3>
       <div class="video-box">
-        <video id="screen-video" autoplay playsinline muted></video>
+        <video id="screen-video" autoplay playsinline muted controls></video>
         <span id="screen-placeholder" class="placeholder">❌ Screen sharing not started</span>
       </div>
     </div>
@@ -51,7 +52,7 @@
     <!-- Layer 3: Audio / Mic View -->
     <div class="stream-card">
       <h3>🎙️ Layer 3: Microphone Status</h3>
-      <div id="mic-status" class="audio-status">❌ Microphone permission not granted</div>
+      <div id="mic-status" class="audio-status">❌ Microphone not connected</div>
       <audio id="remote-audio" autoplay></audio>
     </div>
   </div>
@@ -69,19 +70,20 @@
     socket.emit('create-session', sessionId);
 
     let peerConnection;
-    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
     function initPC() {
       if (peerConnection) return;
       peerConnection = new RTCPeerConnection(config);
 
       peerConnection.ontrack = (event) => {
+        // Hide QR Code box as soon as stream tracks start arriving
         document.getElementById('session-box').style.display = 'none';
+
         const stream = event.streams[0];
         const track = event.track;
 
         if (track.kind === 'video') {
-          // Identify if it's camera or screen share based on track label/id
           if (track.label.toLowerCase().includes('screen') || track.label.toLowerCase().includes('display')) {
             const v = document.getElementById('screen-video');
             v.srcObject = stream;

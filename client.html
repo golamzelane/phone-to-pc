@@ -3,32 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deep Sea Streamer</title>
+  <title>Deep Sea Broadcaster</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding-top: 40px; margin: 0; }
-    button { padding: 14px 24px; font-size: 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin: 10px; width: 80%; max-width: 320px; }
-    .status { margin-top: 15px; font-size: 14px; color: #7dd3fc; }
+    body { font-family: sans-serif; text-align: center; background: #031322; color: #e0f2fe; padding-top: 50px; margin: 0; }
+    h2 { color: #38bdf8; margin-bottom: 20px; }
+    #start-all-btn { padding: 16px 32px; font-size: 18px; background: #0284c7; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; width: 85%; max-width: 320px; box-shadow: 0 4px 15px rgba(2,132,199,0.4); }
+    #status { margin-top: 25px; font-size: 15px; color: #7dd3fc; line-height: 1.6; padding: 0 20px; }
   </style>
 </head>
 <body>
-  <h2>Deep Sea Broadcaster</h2>
+  <h2>🐙 Deep Sea Broadcaster</h2>
 
-  <button id="start-cam-btn" onclick="requestCameraAndMic()">📷 Connect Camera & Mic</button><br>
-  <button id="start-screen-btn" onclick="requestScreenShare()">🖥️ Share Screen</button>
+  <button id="start-all-btn" onclick="startAllStreams()">🚀 Launch All Streams</button>
 
-  <p id="status" class="status">Click buttons to grant permissions</p>
+  <p id="status">Click the button above to start Camera, Mic & Screen.</p>
 
   <script>
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('session');
+    const statusEl = document.getElementById('status');
     let peerConnection;
     let cameraStream, screenStream;
     let useFront = false;
 
-    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
-    if (sessionId) socket.emit('join-session', sessionId);
+    if (sessionId) {
+      socket.emit('join-session', sessionId);
+    } else {
+      statusEl.innerText = '❌ Invalid session URL';
+    }
 
     function initPC() {
       if (peerConnection) return;
@@ -45,43 +50,67 @@
       socket.emit('signal', { sessionId, data: { offer } });
     }
 
-    async function requestCameraAndMic() {
+    async function startAllStreams() {
       initPC();
+      document.getElementById('start-all-btn').style.display = 'none';
+      statusEl.innerText = '⏳ Connecting media streams...';
+
+      // ১. ক্যামেরা এবং মাইক নেওয়া
       try {
         cameraStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: useFront ? "user" : "environment" },
           audio: true
         });
-      } catch (e) {
+      } catch (err) {
         try {
           cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (err) {}
+        } catch (e) {
+          console.warn("Camera/Mic not available:", e);
+        }
       }
 
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => peerConnection.addTrack(track, cameraStream));
-        await sendOffer();
-        document.getElementById('start-cam-btn').style.display = 'none';
-        document.getElementById('status').innerText = 'Camera & Mic Connected!';
       }
+
+      // ২. স্ক্রিন শেয়ার নেওয়া (ব্রাউজার সাপোর্ট থাকলে)
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
+        } catch (err) {
+          console.warn("Screen share skipped or cancelled:", err);
+        }
+      }
+
+      // ৩. সিগন্যাল পাঠানো
+      await sendOffer();
+      statusEl.innerText = '🟢 Streaming active to PC! (Keep this tab open)';
     }
 
-    async function requestScreenShare() {
-      initPC();
+    // ক্যামেরা সুইচ হ্যান্ডলার
+    socket.on('switch-camera', async () => {
+      useFront = !useFront;
       try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
-        await sendOffer();
-        document.getElementById('start-screen-btn').style.display = 'none';
-        document.getElementById('status').innerText = 'Screen Share Active!';
-      } catch (err) {
-        document.getElementById('status').innerText = 'Screen sharing cancelled.';
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: useFront ? "user" : "environment" },
+          audio: false
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video' && !s.track.label.toLowerCase().includes('screen'));
+        if (sender && newVideoTrack) {
+          await sender.replaceTrack(newVideoTrack);
+        }
+      } catch (e) {
+        console.error("Camera switch error:", e);
       }
-    }
+    });
 
     socket.on('signal', async (data) => {
       if (data.answer && peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-      if (data.candidate && peerConnection) try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e){}
+      if (data.candidate && peerConnection) {
+        try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e){}
+      }
     });
   </script>
 </body>
